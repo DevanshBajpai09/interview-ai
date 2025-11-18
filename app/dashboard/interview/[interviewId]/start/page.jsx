@@ -2,8 +2,11 @@
 import { db } from "@/utils/db";
 import { MockInterview } from "@/utils/schema";
 import { eq } from "drizzle-orm";
-import React, { useState } from "react";
-import { useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import useProctoring from "./hooks/useProctoring";
+import { WebCamContext } from "./../../../../dashboard/layout";
+import { AlertTriangle } from "lucide-react";
+
 import QuestionSection from "./_components/QuestionSection";
 import RecordAnswerSection from "./_components/RecordAnswerSection";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,34 @@ const StartInterview = ({ params }) => {
   const [mockInterviewQuestion, setMockInterviewQuestion] = useState(null);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // pop-up state
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningLevel, setWarningLevel] = useState(0);
+
+  // webcam stream
+  const { stream } = useContext(WebCamContext);
+
+  // Proctoring Hook
+  const { violations } = useProctoring(params.interviewId, {
+    reuseStream: stream,
+    requireFaceCheck: true,
+    violationLimit: 3,
+  });
+
+  useEffect(() => {
+    // Listen for popup events
+    const handler = (e) => {
+      const count = e.detail;
+      if (count === 1 || count === 2) {
+        setWarningLevel(count);
+        setShowWarning(true);
+      }
+    };
+
+    window.addEventListener("proctor-warning", handler);
+    return () => window.removeEventListener("proctor-warning", handler);
+  }, []);
 
   useEffect(() => {
     GetInterviewDetails();
@@ -32,7 +63,6 @@ const StartInterview = ({ params }) => {
 
       if (result[0]) {
         const jsonMockResp = JSON.parse(result[0].jsonMockResp);
-        console.log(jsonMockResp);
         setMockInterviewQuestion(jsonMockResp);
         setInterviewData(result[0]);
       }
@@ -45,15 +75,11 @@ const StartInterview = ({ params }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex items-center justify-center p-8">
+      <div className="min-h-screen flex items-center justify-center p-8">
         <Card className="border-0 shadow-xl max-w-md w-full text-center">
           <CardContent className="p-8">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <Video className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Loading Interview</h3>
-            <p className="text-gray-600 mb-4">Preparing your interview session...</p>
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
+            <p className="mt-3 text-gray-600">Preparing your interview...</p>
           </CardContent>
         </Card>
       </div>
@@ -62,17 +88,12 @@ const StartInterview = ({ params }) => {
 
   if (!mockInterviewQuestion || !interviewData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex items-center justify-center p-8">
-        <Card className="border-0 shadow-xl max-w-md w-full text-center">
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <Card className="shadow-xl max-w-md w-full text-center">
           <CardContent className="p-8">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Flag className="w-8 h-8 text-red-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Interview Not Found</h3>
-            <p className="text-gray-600 mb-6">The requested interview session could not be loaded.</p>
-            <Link href="/dashboard">
-              <Button className="w-full">Return to Dashboard</Button>
-            </Link>
+            <Flag className="w-10 h-10 text-red-600 mx-auto mb-3" />
+            <p>Interview not found.</p>
+            <Link href="/dashboard"><Button className="mt-4 w-full">Back</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -80,56 +101,57 @@ const StartInterview = ({ params }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-4">
+    <div className="min-h-screen p-4 bg-gradient-to-br from-slate-50 to-blue-50/30">
       <div className="max-w-7xl mx-auto">
+
+        {/* 🔥 Proctoring Warning Popup */}
+        {showWarning && warningLevel < 3 && (
+          <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full text-center animate-in fade-in zoom-in duration-300">
+              <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-3" />
+
+              <h2 className="text-xl font-bold mb-2">
+                {warningLevel === 1 ? "⚠️ Warning!" : "🚨 Last Warning!"}
+              </h2>
+
+              <p className="text-gray-700 mb-4">
+                {warningLevel === 1
+  ? "Unethical activity detected. Stay focused on the interview."
+  : "Repeated unethical activity detected. One more violation will end the interview."}
+
+              </p>
+
+              <button
+                onClick={() => setShowWarning(false)}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                I Understand
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 🔐 Violation Counter */}
+        <div className="flex justify-center mb-4">
+          <Badge className={`px-4 py-2 flex items-center gap-2 
+            ${violations > 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Violations: {violations} / 3
+          </Badge>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
-              <Video className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-              Live Interview Session
-            </h1>
+            <Video className="text-blue-600 w-6 h-6" />
+            <h1 className="text-3xl font-bold">Live Interview</h1>
           </div>
-          
-          {/* Progress Indicator */}
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-              Question {activeQuestionIndex + 1} of {mockInterviewQuestion.length}
-            </Badge>
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-              <Mic className="w-3 h-3 mr-1" />
-              Recording Ready
-            </Badge>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="w-full max-w-md mx-auto bg-gray-200 rounded-full h-2 mb-2">
-            <div 
-              className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${((activeQuestionIndex + 1) / mockInterviewQuestion.length) * 100}%` }}
-            ></div>
-          </div>
-          <p className="text-gray-600 text-sm">
-            Progress: {activeQuestionIndex + 1} of {mockInterviewQuestion.length} questions
-          </p>
         </div>
 
+        {/* Main Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Question Section */}
-          <Card className="border-0 shadow-xl bg-white/70 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-xl text-gray-800">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <span className="text-blue-600 font-semibold">{activeQuestionIndex + 1}</span>
-                </div>
-                Interview Question
-              </CardTitle>
-              <CardDescription>
-                Read the question carefully before answering
-              </CardDescription>
-            </CardHeader>
+          <Card className="shadow-xl bg-white/70">
             <CardContent>
               <QuestionSection
                 mockInterviewQuestion={mockInterviewQuestion}
@@ -138,17 +160,7 @@ const StartInterview = ({ params }) => {
             </CardContent>
           </Card>
 
-          {/* Recording Section */}
-          <Card className="border-0 shadow-xl bg-white/70 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-xl text-gray-800">
-                <Mic className="w-5 h-5 text-green-600" />
-                Your Response
-              </CardTitle>
-              <CardDescription>
-                Record your answer using audio and video
-              </CardDescription>
-            </CardHeader>
+          <Card className="shadow-xl bg-white/70">
             <CardContent>
               <RecordAnswerSection
                 mockInterviewQuestion={mockInterviewQuestion}
@@ -159,50 +171,31 @@ const StartInterview = ({ params }) => {
           </Card>
         </div>
 
-        {/* Navigation Controls */}
-        <Card className="border-0 shadow-xl bg-white/70 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              {/* Question Progress */}
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="bg-gray-100">
-                  {activeQuestionIndex + 1} / {mockInterviewQuestion.length}
-                </Badge>
-                <span className="text-gray-600 text-sm">
-                  {mockInterviewQuestion.length - activeQuestionIndex - 1} questions remaining
-                </span>
+        {/* Navigation */}
+        <Card className="shadow-xl bg-white/70">
+          <CardContent>
+            <div className="flex justify-between items-center">
+              <div>
+                <Badge>{activeQuestionIndex + 1} / {mockInterviewQuestion.length}</Badge>
               </div>
 
-              {/* Navigation Buttons */}
               <div className="flex gap-3">
                 {activeQuestionIndex > 0 && (
-                  <Button
-                    onClick={() => setActiveQuestionIndex(activeQuestionIndex - 1)}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Previous
+                  <Button variant="outline" onClick={() => setActiveQuestionIndex(activeQuestionIndex - 1)}>
+                    <ChevronLeft /> Previous
                   </Button>
                 )}
-                
-                {activeQuestionIndex !== mockInterviewQuestion?.length - 1 && (
-                  <Button
-                    onClick={() => setActiveQuestionIndex(activeQuestionIndex + 1)}
-                    className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600"
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4" />
+
+                {activeQuestionIndex < mockInterviewQuestion.length - 1 && (
+                  <Button onClick={() => setActiveQuestionIndex(activeQuestionIndex + 1)}>
+                    Next <ChevronRight />
                   </Button>
                 )}
-                
-                {activeQuestionIndex === mockInterviewQuestion?.length - 1 && (
-                  <Link
-                    href={"/dashboard/interview/" + interviewData?.mockId + "/feedback"}
-                  >
-                    <Button className="gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
-                      <Flag className="w-4 h-4" />
-                      End Interview
+
+                {activeQuestionIndex === mockInterviewQuestion.length - 1 && (
+                  <Link href={`/dashboard/interview/${interviewData.mockId}/feedback`}>
+                    <Button className="bg-green-600 hover:bg-green-700">
+                      <Flag /> End Interview
                     </Button>
                   </Link>
                 )}
@@ -211,25 +204,6 @@ const StartInterview = ({ params }) => {
           </CardContent>
         </Card>
 
-        {/* Quick Tips */}
-        <Card className="border-0 bg-amber-50/50 border-amber-200 mt-6">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-amber-600 text-sm">💡</span>
-              </div>
-              <div>
-                <h4 className="font-medium text-amber-800 mb-1">Interview Tips</h4>
-                <ul className="text-amber-700 text-sm space-y-1">
-                  <li>• Speak clearly and at a moderate pace</li>
-                  <li>• Structure your answer with clear points</li>
-                  <li>• Take a moment to think before answering</li>
-                  <li>• Maintain eye contact with the camera</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

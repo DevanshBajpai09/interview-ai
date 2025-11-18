@@ -30,7 +30,8 @@ const RecordAnswerSection = ({
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const { webCamEnabled, setWebCamEnabled } = useContext(WebCamContext);
+  const { webCamEnabled, setWebCamEnabled, stream, setStream } = useContext(WebCamContext);
+
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
 
@@ -41,6 +42,30 @@ const RecordAnswerSection = ({
       updateUserAnswer();
     }
   }, [userAnswer]);
+
+  const enableCamera = async () => {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    setStream(s);           // save stream to context
+    setWebCamEnabled(true); // camera enabled
+    toast.success("Camera enabled successfully!");
+  } catch (err) {
+    toast.error("Camera permission denied.");
+    console.error(err);
+  }
+};
+
+const disableCamera = () => {
+  try {
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      setStream(null);
+    }
+  } catch (e) {}
+  setWebCamEnabled(false);
+  toast.info("Camera disabled");
+};
+
 
   const startRecording = async () => {
     try {
@@ -79,7 +104,7 @@ const RecordAnswerSection = ({
   const transcribeAudio = async (audioBlob) => {
     try {
       setLoading(true);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
       
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
@@ -154,7 +179,9 @@ const RecordAnswerSection = ({
   return (
     <div className="space-y-6">
       {/* Webcam Section */}
-      <Card className="border-0 shadow-xl bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <Card className={`border-0 shadow-xl bg-white/70 backdrop-blur-sm 
+  ${!webCamEnabled ? "opacity-60 pointer-events-none" : ""}`}>
+
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-xl">
             <Camera className="w-5 h-5 text-blue-600" />
@@ -169,11 +196,20 @@ const RecordAnswerSection = ({
             {webCamEnabled ? (
               <div className="w-full">
                 <Webcam
-                  mirrored={true}
-                  height={280}
-                  width={480}
-                  className="w-full h-80 object-cover"
-                />
+  videoConstraints={{ facingMode: "user" }}
+  mirrored={true}
+  height={280}
+  width={480}
+  className="w-full h-80 object-cover"
+  audio={false}
+  ref={(webcamRef) => {
+    // Attach stream to webcam element manually
+    if (webcamRef && stream) {
+      webcamRef.video.srcObject = stream;
+    }
+  }}
+/>
+
                 <div className="absolute top-3 right-3">
                   <Badge className="bg-green-500 text-white animate-pulse">
                     LIVE
@@ -210,7 +246,11 @@ const RecordAnswerSection = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Webcam Toggle */}
             <Button
-              onClick={() => setWebCamEnabled((prev) => !prev)}
+  onClick={webCamEnabled ? disableCamera : enableCamera}
+
+
+
+
               variant={webCamEnabled ? "default" : "outline"}
               className="w-full h-12 text-base font-medium gap-3"
               disabled={loading}
@@ -229,30 +269,33 @@ const RecordAnswerSection = ({
             </Button>
 
             {/* Recording Button */}
-            <Button
-              onClick={isRecording ? stopRecording : startRecording}
-              disabled={loading}
-              variant={isRecording ? "destructive" : "default"}
-              className="w-full h-12 text-base font-medium gap-3 relative overflow-hidden"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Processing...
-                </>
-              ) : isRecording ? (
-                <>
-                  <div className="absolute inset-0 bg-red-600 animate-pulse"></div>
-                  <MicOff className="w-5 h-5 relative z-10" />
-                  <span className="relative z-10">Stop Recording</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-5 h-5" />
-                  Start Recording
-                </>
-              )}
-            </Button>
+            {/* Recording Button */}
+<Button
+  onClick={isRecording ? stopRecording : startRecording}
+  disabled={loading || !webCamEnabled}   // ⬅ ADD THIS
+  variant={isRecording ? "destructive" : "default"}
+  className={`w-full h-12 text-base font-medium gap-3 relative overflow-hidden 
+    ${!webCamEnabled ? "opacity-50 cursor-not-allowed" : ""}`} // ⬅ visual disabled state
+>
+  {loading ? (
+    <>
+      <Loader2 className="w-5 h-5 animate-spin" />
+      Processing...
+    </>
+  ) : isRecording ? (
+    <>
+      <div className="absolute inset-0 bg-red-600 animate-pulse"></div>
+      <MicOff className="w-5 h-5 relative z-10" />
+      <span className="relative z-10">Stop Recording</span>
+    </>
+  ) : (
+    <>
+      <Mic className="w-5 h-5" />
+      Start Recording
+    </>
+  )}
+</Button>
+
           </div>
 
           {/* Status Indicators */}

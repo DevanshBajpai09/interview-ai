@@ -9,8 +9,13 @@ export const MockInterview = pgTable('mockInterview', {
   jobExperience: varchar('jobexperience').notNull(),
   createdBy: varchar('createdby').notNull(),
   createdAt: varchar('createdat'),
-  mockId: varchar('mockid').notNull()
+  mockId: varchar('mockid').notNull(),
+
+  // NEW FIELDS
+  completed: varchar("completed"),  
+  completedReason: text("completed_reason"),
 });
+
 
 
 export const Question = pgTable("question", {
@@ -47,3 +52,19 @@ export const Newsletter = pgTable("newsletter", {
   newMessage: text("newmessage"),
   createdAt: varchar("createdat"),
 });
+
+export const ProctorLog = pgTable("proctor_log", {
+  id: serial("id").primaryKey(),
+  interviewId: varchar("interview_id").notNull(),
+  reason: text("reason").notNull(),
+  meta: text("meta"),
+  timestamp: varchar("timestamp").notNull(),
+});
+
+
+export const Heartbeat = pgTable("proctor_heartbeat", {
+  id: serial("id").primaryKey(),
+  interviewId: varchar("interview_id").notNull(),
+  timestamp: varchar("timestamp").notNull(),
+});
+
