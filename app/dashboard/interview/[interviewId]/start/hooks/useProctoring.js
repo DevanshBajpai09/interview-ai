@@ -97,7 +97,7 @@ export default function useProctoring(interviewId, options = {}) {
     let missed = 0;
 
     async function initFaceCheck() {
-      await faceapi.nets.tinyFaceDetector.loadFromUri("/public/models");
+      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
 
       if (!streamRef.current) {
         try {

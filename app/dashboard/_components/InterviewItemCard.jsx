@@ -98,15 +98,23 @@ const InterviewItemCard = ({ interview }) => {
                             <BarChart3 className="w-3 h-3" />
                             Results
                         </Button>
-                        <Button 
-                            onClick={onStart}
-                            className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md group-hover:shadow-lg transition-all duration-300 gap-2"
-                            size="sm"
-                        >
-                            <Play className="w-3 h-3" />
-                            Start
-                            <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                        </Button>
+                       <Button 
+    onClick={interview?.completed ? null : onStart}
+    disabled={interview?.completed}
+    className={`flex-1 gap-2 shadow-md transition-all duration-300 
+        ${interview?.completed 
+            ? "bg-gray-300 text-gray-600 cursor-not-allowed" 
+            : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white group-hover:shadow-lg"
+        }`}
+    size="sm"
+>
+    <Play className="w-3 h-3" />
+    {interview?.completed ? "Completed" : "Start"}
+    {!interview?.completed && (
+        <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+    )}
+</Button>
+
                     </div>
                 </CardFooter>
             </Card>
